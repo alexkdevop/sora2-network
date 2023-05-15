@@ -30,26 +30,12 @@
 
 use core::marker::PhantomData;
 
-#[cfg(feature = "ready-to-test")]
-use bridge_types::traits::BridgeAssetRegistry;
-#[cfg(feature = "ready-to-test")]
-use codec::{Decode, Encode};
 use frame_support::dispatch::DispatchClass;
 use frame_support::traits::{Currency, OnUnbalanced};
 use frame_support::weights::constants::BlockExecutionWeight;
 use frame_support::weights::Weight;
-#[cfg(feature = "ready-to-test")]
-use frame_support::{
-    dispatch::{DispatchInfo, Dispatchable, PostDispatchInfo},
-    traits::Contains,
-    RuntimeDebug,
-};
 
 pub use common::weights::{BlockLength, BlockWeights, TransactionByteFee};
-#[cfg(feature = "ready-to-test")]
-use scale_info::TypeInfo;
-#[cfg(feature = "ready-to-test")]
-use sp_runtime::DispatchError;
 
 pub type NegativeImbalanceOf<T> = <<T as pallet_staking::Config>::Currency as Currency<
     <T as frame_system::Config>::AccountId,
@@ -258,88 +244,6 @@ impl<T: frame_system::Config + pallet_staking::Config> OnUnbalanced<NegativeImba
     /// This implementation allows us to handle the funds that were burned in democracy pallet.
     /// Democracy pallet already did `slash_reserved` for them.
     fn on_nonzero_unbalanced(_amount: NegativeImbalanceOf<T>) {}
-}
-
-#[cfg(feature = "ready-to-test")] // Substrate bridge
-#[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug, TypeInfo)]
-pub struct DispatchableSubstrateBridgeCall(
-    bridge_types::substrate::SubstrateBridgeMessage<
-        crate::AccountId,
-        crate::AssetId,
-        crate::Balance,
-    >,
-);
-
-#[cfg(feature = "ready-to-test")] // Substrate bridge
-impl Dispatchable for DispatchableSubstrateBridgeCall {
-    type RuntimeOrigin = crate::RuntimeOrigin;
-    type Config = crate::Runtime;
-    type Info = DispatchInfo;
-    type PostInfo = PostDispatchInfo;
-
-    fn dispatch(
-        self,
-        origin: Self::RuntimeOrigin,
-    ) -> sp_runtime::DispatchResultWithInfo<Self::PostInfo> {
-        frame_support::log::info!("Dispatching SubstrateBridgeCall: {:?}", self.0);
-        match self.0 {
-            bridge_types::substrate::SubstrateBridgeMessage::SubstrateApp(msg) => {
-                let call: substrate_bridge_app::Call<crate::Runtime> = msg.into();
-                let call: crate::RuntimeCall = call.into();
-                call.dispatch(origin)
-            }
-            bridge_types::substrate::SubstrateBridgeMessage::XCMApp(_msg) => {
-                unimplemented!()
-            }
-        }
-    }
-}
-
-#[cfg(feature = "ready-to-test")] // Bridges
-pub struct BridgeAssetRegistryImpl;
-
-#[cfg(feature = "ready-to-test")] // Bridges
-impl BridgeAssetRegistry<crate::AccountId, crate::AssetId> for BridgeAssetRegistryImpl {
-    type AssetName = crate::AssetName;
-    type AssetSymbol = crate::AssetSymbol;
-    type Decimals = u8;
-
-    fn register_asset(
-        owner: crate::AccountId,
-        name: Self::AssetName,
-        symbol: Self::AssetSymbol,
-        decimals: Self::Decimals,
-    ) -> Result<crate::AssetId, DispatchError> {
-        let asset_id =
-            crate::Assets::register_from(&owner, symbol, name, decimals, 0, true, None, None)?;
-        Ok(asset_id)
-    }
-}
-
-#[cfg(feature = "ready-to-test")] // Substrate bridge
-pub struct SubstrateBridgeCallFilter;
-
-#[cfg(feature = "ready-to-test")] // Substrate bridge
-impl Contains<DispatchableSubstrateBridgeCall> for SubstrateBridgeCallFilter {
-    fn contains(call: &DispatchableSubstrateBridgeCall) -> bool {
-        match &call.0 {
-            bridge_types::substrate::SubstrateBridgeMessage::SubstrateApp(_) => true,
-            bridge_types::substrate::SubstrateBridgeMessage::XCMApp(_) => false,
-        }
-    }
-}
-
-#[cfg(feature = "ready-to-test")] // EVM bridge
-pub struct EVMBridgeCallFilter;
-
-#[cfg(feature = "ready-to-test")] // EVM bridge
-impl Contains<crate::RuntimeCall> for EVMBridgeCallFilter {
-    fn contains(call: &crate::RuntimeCall) -> bool {
-        match call {
-            crate::RuntimeCall::ERC20App(_) | crate::RuntimeCall::EthApp(_) => true,
-            _ => false,
-        }
-    }
 }
 
 #[cfg(test)]
