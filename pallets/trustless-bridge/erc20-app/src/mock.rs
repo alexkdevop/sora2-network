@@ -421,10 +421,7 @@ pub fn new_tester() -> sp_io::TestExternalities {
     .unwrap();
 
     GenesisBuild::<Test>::assimilate_storage(
-        &bridge_outbound_channel::GenesisConfig {
-            fee: 10000,
-            interval: 10,
-        },
+        &bridge_outbound_channel::GenesisConfig { interval: 10 },
         &mut storage,
     )
     .unwrap();

@@ -1159,7 +1159,6 @@ fn testnet_genesis(
         },
         #[cfg(feature = "wip")] // EVM bridge
         bridge_outbound_channel: BridgeOutboundChannelConfig {
-            fee: 10000,
             interval: 10,
             ..Default::default()
         },

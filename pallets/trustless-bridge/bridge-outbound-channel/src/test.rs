@@ -219,7 +219,6 @@ pub fn new_tester() -> sp_io::TestExternalities {
     let config: bridge_outbound_channel::GenesisConfig<Test> =
         bridge_outbound_channel::GenesisConfig {
             interval: 10u32.into(),
-            fee: 100u32.into(),
         };
     config.assimilate_storage(&mut storage).unwrap();
 

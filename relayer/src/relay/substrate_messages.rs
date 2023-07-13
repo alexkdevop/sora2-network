@@ -171,6 +171,11 @@ where
                 max_gas: message.max_gas,
             });
         }
+        debug!(
+            "Committing batch {}, number of messages is {}",
+            commitment_inner.nonce,
+            messages.len()
+        );
         let batch = inbound_channel::Batch {
             nonce: U256::from(commitment_inner.nonce),
             total_max_gas: commitment_inner.total_max_gas,
@@ -201,9 +206,9 @@ where
         debug!("Send submit messages");
         let tx = call.send().await?;
         debug!("Wait for confirmations submit messages: {:?}", tx);
-        let tx = tx.confirmations(1).await?;
-        debug!("Submit messages: {:?}", tx);
-        if let Some(tx) = tx {
+        let receipt = tx.confirmations(1).await?;
+        debug!("Submit messages: {:?}", receipt);
+        if let Some(tx) = receipt {
             for log in tx.logs {
                 let raw_log = RawLog {
                     topics: log.topics.clone(),
@@ -266,7 +271,10 @@ where
                 };
                 let latest_sent = self.syncer.latest_sent();
                 if Into::<u64>::into(block_number) > latest_sent {
-                    debug!("Waiting for BEEFY block {:?}", block_number);
+                    debug!(
+                        "Waiting for BEEFY block {:?}, latest sent {:?}",
+                        block_number, latest_sent
+                    );
                     break;
                 }
                 self.send_commitment(nonce).await?;

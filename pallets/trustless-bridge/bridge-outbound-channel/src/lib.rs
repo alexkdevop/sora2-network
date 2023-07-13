@@ -137,16 +137,6 @@ pub mod pallet {
     #[pallet::storage]
     pub type ChannelNonces<T: Config> = StorageMap<_, Identity, EVMChainId, u64, ValueQuery>;
 
-    #[pallet::storage]
-    #[pallet::getter(fn fee)]
-    pub type Fee<T: Config> = StorageValue<_, BalanceOf<T>, ValueQuery, DefaultFee<T>>;
-
-    #[pallet::type_value]
-    pub fn DefaultFee<T: Config>() -> BalanceOf<T> {
-        // TODO: Select fee value
-        10000
-    }
-
     /// The current storage version.
     const STORAGE_VERSION: StorageVersion = StorageVersion::new(1);
 
@@ -204,13 +194,13 @@ pub mod pallet {
         ChannelExists,
     }
 
+    // TODO remove
     #[pallet::call]
     impl<T: Config> Pallet<T> {
         #[pallet::call_index(0)]
         #[pallet::weight(<T as Config>::WeightInfo::set_fee())]
         pub fn set_fee(origin: OriginFor<T>, amount: BalanceOf<T>) -> DispatchResultWithPostInfo {
             ensure_root(origin)?;
-            Fee::<T>::set(amount);
             Ok(().into())
         }
     }
@@ -282,7 +272,6 @@ pub mod pallet {
 
     #[pallet::genesis_config]
     pub struct GenesisConfig<T: Config> {
-        pub fee: BalanceOf<T>,
         pub interval: T::BlockNumber,
     }
 
@@ -290,7 +279,6 @@ pub mod pallet {
     impl<T: Config> Default for GenesisConfig<T> {
         fn default() -> Self {
             Self {
-                fee: Default::default(),
                 interval: 10u32.into(),
             }
         }
@@ -299,7 +287,6 @@ pub mod pallet {
     #[pallet::genesis_build]
     impl<T: Config> GenesisBuild<T> for GenesisConfig<T> {
         fn build(&self) {
-            Fee::<T>::set(self.fee.clone());
             Interval::<T>::set(self.interval.clone());
         }
     }
@@ -332,21 +319,34 @@ pub mod pallet {
 
             // TODO compute fee and charge
             // Attempt to charge a fee for message submission
-            // gas used - estimate - depends on message payload + batch submission + target call
+
+            // Estimated gas used for contract call
+            let estimated_gas_used = 147000;
             // base fee - from eth light client as EthereumGasOracle
+            let base_fee = 1;
             // priority fee - some const
-            let _fee = match who {
+            let priority_fee = 1;
+
+            // TODO into XOR
+            let fee = estimated_gas_used * (base_fee + priority_fee);
+            let fee = 42;
+
+            match who {
+                RawOrigin::Root => {
+                    // do not charge fee from root?
+                    // TODO - clarify
+                }
                 RawOrigin::Signed(who) => {
-                    let fee = Self::fee();
                     technical::Pallet::<T>::transfer_in(
                         &T::FeeCurrency::get(),
                         who,
                         &T::FeeTechAccountId::get(),
                         fee,
                     )?;
-                    fee
                 }
-                _ => 0u128.into(),
+                RawOrigin::None => {
+                    // TODO error - should be signed
+                }
             };
 
             // batch nonce

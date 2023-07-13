@@ -22,7 +22,10 @@ pub async fn load_digest<S: SenderConfig>(
     let block_hash = sender.block_hash(block_number).await?;
     let digest = sender.auxiliary_digest(Some(block_hash)).await?;
     if digest.logs.is_empty() {
-        return Err(anyhow!("Digest is empty"));
+        return Err(anyhow!(format!(
+            "Digest is empty for block {:?}",
+            block_number
+        )));
     }
     let valid_items = digest
         .logs

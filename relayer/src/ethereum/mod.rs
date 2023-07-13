@@ -145,7 +145,7 @@ impl SignedClient {
         use std::io::Write;
         let gas = call.estimate_gas().await?.as_u128();
         let metric = format!(
-            "{:?} {} '{}' {}\n",
+            "{:?} {} '{}' {}",
             call.tx.to(),
             call.function.name,
             additional,
