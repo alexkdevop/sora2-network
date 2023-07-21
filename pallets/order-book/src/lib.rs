@@ -40,7 +40,7 @@ use common::LiquiditySourceType;
 use common::{
     balance, AssetInfoProvider, AssetName, AssetSymbol, Balance, BalancePrecision, ContentSource,
     Description, DexInfoProvider, LiquiditySource, PriceVariant, RewardReason,
-    ToOrderTechUnitFromDEXAndTradingPair, TradingPairSourceManager,
+    SyntheticInfoProvider, ToOrderTechUnitFromDEXAndTradingPair, TradingPairSourceManager,
 };
 use core::fmt::Debug;
 use frame_support::ensure;
@@ -155,6 +155,7 @@ pub mod pallet {
             ContentSource,
             Description,
         >;
+        type SyntheticInfoProvider: SyntheticInfoProvider<Self::AssetId>;
         type DexInfoProvider: DexInfoProvider<Self::DEXId, DEXInfo<Self::AssetId>>;
         type Time: Time;
         type ParameterUpdateOrigin: EnsureOrigin<
@@ -343,6 +344,13 @@ pub mod pallet {
             amount: OrderAmount,
         },
 
+        /// The limit order is updated
+        LimitOrderUpdated {
+            order_book_id: OrderBookId<AssetIdOf<T>, T::DEXId>,
+            order_id: T::OrderId,
+            owner_id: T::AccountId,
+        },
+
         /// User executes a deal by the market order
         MarketOrderExecuted {
             order_book_id: OrderBookId<AssetIdOf<T>, T::DEXId>,
@@ -384,10 +392,12 @@ pub mod pallet {
         NotEnoughLiquidityInOrderBook,
         /// Cannot create order book with equal base and target assets
         ForbiddenToCreateOrderBookWithSameAssets,
-        /// The asset is not allowed to be base. Only dex base asset can be a quote asset for order book
-        NotAllowedBaseAsset,
+        /// The asset is not allowed to be quote. Only the dex base asset can be a quote asset for order book
+        NotAllowedQuoteAsset,
         /// Orderbooks cannot be created with given dex id.
         NotAllowedDEXId,
+        /// Synthetic assets are forbidden for order book.
+        SyntheticAssetIsForbidden,
         /// User cannot create an order book with NFT if they don't have NFT
         UserHasNoNft,
         /// Lifespan exceeds defined limits
@@ -466,11 +476,18 @@ pub mod pallet {
                 Error::<T>::NotAllowedDEXId
             );
             let dex_info = T::DexInfoProvider::get_dex_info(&order_book_id.dex_id)?;
-            // the base asset of DEX must be a quote asset of order book
+            // a quote asset of order book must be the base asset of DEX
             ensure!(
                 order_book_id.quote == dex_info.base_asset_id,
-                Error::<T>::NotAllowedBaseAsset
+                Error::<T>::NotAllowedQuoteAsset
             );
+
+            // synthetic asset are forbidden
+            ensure!(
+                !T::SyntheticInfoProvider::is_synthetic(&order_book_id.base),
+                Error::<T>::SyntheticAssetIsForbidden
+            );
+
             T::AssetInfoProvider::ensure_asset_exists(&order_book_id.base)?;
             T::EnsureTradingPairExists::ensure_trading_pair_exists(
                 &order_book_id.dex_id,
@@ -650,16 +667,22 @@ pub mod pallet {
                 Error::<T>::MaxLotSizeIsMoreThanTotalSupply
             );
 
+            let prev_step_lot_size = order_book.step_lot_size;
+
             order_book.tick_size = tick_size;
             order_book.step_lot_size = step_lot_size;
             order_book.min_lot_size = min_lot_size;
             order_book.max_lot_size = max_lot_size;
 
             // Note:
-            // Already existed limit orders are not changed even if they don't meet the requirements of new attributes.
-            // They stay in order book until they are executed, canceled or expired.
+            // The amounts of already existed limit orders are aligned if they don't meet the requirements of new `step_lot_size` value.
             // All new limit orders must meet the requirements of new attributes.
 
+            if prev_step_lot_size % order_book.step_lot_size != 0 {
+                let mut data = CacheDataLayer::<T>::new();
+                order_book.align_limit_orders(&mut data)?;
+                data.commit();
+            }
             <OrderBooks<T>>::set(order_book_id, Some(order_book));
             Self::deposit_event(Event::<T>::OrderBookUpdated { order_book_id });
             Ok(().into())
@@ -739,6 +762,32 @@ pub mod pallet {
                 <OrderBooks<T>>::get(order_book_id).ok_or(Error::<T>::UnknownOrderBook)?;
 
             order_book.cancel_limit_order(order, &mut data)?;
+            data.commit();
+            Ok(().into())
+        }
+
+        #[pallet::call_index(6)]
+        #[pallet::weight(<T as Config>::WeightInfo::cancel_limit_order().saturating_mul(limit_orders_to_cancel.iter().fold(0, |count, (_, order_ids)| count + order_ids.len() as u64)))]
+        pub fn cancel_limit_orders_batch(
+            origin: OriginFor<T>,
+            limit_orders_to_cancel: Vec<(OrderBookId<AssetIdOf<T>, T::DEXId>, Vec<T::OrderId>)>,
+        ) -> DispatchResult {
+            let who = ensure_signed(origin)?;
+            let mut data = CacheDataLayer::<T>::new();
+
+            for (order_book_id, order_ids) in limit_orders_to_cancel {
+                for order_id in order_ids {
+                    let order = data.get_limit_order(&order_book_id, order_id)?;
+
+                    ensure!(order.owner == who, Error::<T>::Unauthorized);
+
+                    let order_book =
+                        <OrderBooks<T>>::get(order_book_id).ok_or(Error::<T>::UnknownOrderBook)?;
+
+                    order_book.cancel_limit_order(order, &mut data)?;
+                }
+            }
+
             data.commit();
             Ok(().into())
         }
@@ -841,6 +890,14 @@ impl<T: Config> Delegate<T::AccountId, T::AssetId, T::OrderId, T::DEXId> for Pal
                 side,
                 amount,
             },
+
+            OrderBookEvent::LimitOrderUpdated { order_id, owner_id } => {
+                Event::<T>::LimitOrderUpdated {
+                    order_book_id,
+                    order_id,
+                    owner_id,
+                }
+            }
 
             OrderBookEvent::MarketOrderExecuted {
                 owner_id,
