@@ -2149,6 +2149,7 @@ impl bridge_outbound_channel::Config for Runtime {
     type FeeCurrency = FeeCurrency;
     type FeeTechAccountId = GetTrustlessBridgeFeesTechAccountId;
     type MessageStatusNotifier = BridgeProxy;
+    type EthereumGasPriceOracle = ();
     type AuxiliaryDigestHandler = LeafProvider;
     type ThisNetworkId = ThisNetworkId;
     type WeightInfo = ();

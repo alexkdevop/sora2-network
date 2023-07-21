@@ -242,6 +242,7 @@ impl bridge_outbound_channel::Config for Test {
     type FeeTechAccountId = GetTrustlessBridgeFeesTechAccountId;
     type FeeCurrency = FeeCurrency;
     type MessageStatusNotifier = BridgeProxy;
+    type EthereumGasPriceOracle = ();
     type MaxTotalGasLimit = MaxTotalGasLimit;
     type AuxiliaryDigestHandler = ();
     type ThisNetworkId = ThisNetworkId;

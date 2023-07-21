@@ -57,8 +57,6 @@ pub mod pallet {
     pub trait Config: frame_system::Config + assets::Config + technical::Config {
         type RuntimeEvent: From<Event<Self>> + IsType<<Self as frame_system::Config>::RuntimeEvent>;
 
-        type EthereumGasPriceOracle: EthereumGasPriceOracle;
-
         /// Max bytes in a message payload
         type MaxMessagePayloadSize: Get<u32>;
 
@@ -80,6 +78,8 @@ pub mod pallet {
             Self::AccountId,
             BalanceOf<Self>,
         >;
+
+        type EthereumGasPriceOracle: EthereumGasPriceOracle;
 
         #[pallet::constant]
         type ThisNetworkId: Get<GenericNetworkId>;
@@ -205,7 +205,7 @@ pub mod pallet {
     impl<T: Config> Pallet<T> {
         #[pallet::call_index(0)]
         #[pallet::weight(<T as Config>::WeightInfo::set_fee())]
-        pub fn set_fee(origin: OriginFor<T>, amount: BalanceOf<T>) -> DispatchResultWithPostInfo {
+        pub fn set_fee(origin: OriginFor<T>, _amount: BalanceOf<T>) -> DispatchResultWithPostInfo {
             ensure_root(origin)?;
             Ok(().into())
         }
