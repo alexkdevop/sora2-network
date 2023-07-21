@@ -2,6 +2,7 @@
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
+use bridge_types::traits::EthereumGasPriceOracle;
 use bridge_types::{H256, U256};
 use codec::Encode;
 use frame_support::ensure;
@@ -55,6 +56,8 @@ pub mod pallet {
     #[pallet::config]
     pub trait Config: frame_system::Config + assets::Config + technical::Config {
         type RuntimeEvent: From<Event<Self>> + IsType<<Self as frame_system::Config>::RuntimeEvent>;
+
+        type EthereumGasPriceOracle: EthereumGasPriceOracle;
 
         /// Max bytes in a message payload
         type MaxMessagePayloadSize: Get<u32>;
@@ -316,9 +319,6 @@ pub mod pallet {
                 payload.len() <= T::MaxMessagePayloadSize::get() as usize,
                 Error::<T>::PayloadTooLarge,
             );
-
-            // TODO compute fee and charge
-            // Attempt to charge a fee for message submission
 
             // Estimated gas used for contract call
             let estimated_gas_used = 147000;
